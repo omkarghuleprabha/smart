@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker Dashboard | Smart Garbage Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root { 
+            --sidebar-bg: #0f172a; 
+            --accent: #22c55e;
+            --primary: #667eea;
+            --sidebar-width: 248px;
+        }
+        body { 
+            background: #f8fafc; 
+            font-family: 'Poppins', sans-serif; 
+            margin: 0;
+            overflow-x: hidden;
+        }
+        .sidebar { 
+            width: var(--sidebar-width); 
+            height: 100vh; 
+            background: var(--sidebar-bg); 
+            position: fixed; 
+            color: white;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        .nav-link { 
+            color: #94a3b8; 
+            padding: 12px 20px; 
+            transition: 0.3s; 
+            border-left: 4px solid transparent;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+        }
+        .nav-link:hover, .nav-link.active { 
+            background: rgba(255,255,255,0.05); 
+            color: white; 
+            border-left-color: var(--accent); 
+        }
+        .main-content { 
+            margin-left: var(--sidebar-width); 
+            padding: clamp(24px, 2vw, 36px); 
+            min-height: 100vh;
+            min-width: 0;
+        }
+        .glass-card { 
+            background: white; 
+            border: none; 
+            border-radius: 15px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        .sidebar-logo {
+            color: white;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 2rem;
+            margin-top: 1rem;
+        }
+        .sidebar-logo .text-success {
+            color: var(--accent);
+        }
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .content-shell {
+            background: white;
+            border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+            padding: 24px;
+        }
+        .page-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.25rem;
+            flex-wrap: wrap;
+        }
+        .page-heading h2 {
+            margin: 0;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .page-heading p {
+            margin: 0.35rem 0 0;
+            color: #64748b;
+        }
+        .info-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 18px;
+            height: 100%;
+        }
+        .info-card h5 {
+            margin-bottom: 0.75rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .info-label {
+            color: #64748b;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .info-value {
+            font-weight: 600;
+            color: #0f172a;
+            margin-top: 0.2rem;
+        }
+        .table-shell {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+        .badge-soft {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 0.35rem 0.8rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+        .badge-soft.pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .badge-soft.assigned {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+        .badge-soft.in_progress {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+        .badge-soft.completed {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .badge-soft.active {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .badge-soft.on_leave {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .badge-soft.inactive {
+            background: #e2e8f0;
+            color: #475569;
+        }
+        @media (max-width: 1200px) {
+            .main-content {
+                padding: 24px;
+            }
+        }
+        @media (max-width: 992px) {
+            .sidebar {
+                position: static;
+                width: 100%;
+                height: auto;
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Sidebar Navigation -->
+<div class="sidebar d-flex flex-column p-3">
+    <div class="sidebar-logo">
+        Smart<span class="text-success">Pro</span>
+    </div>
+    <nav class="nav flex-column gap-2 flex-grow-1">
+        <a href="{{ url_for('auth_bp.worker_dashboard') }}" class="nav-link {% if worker_page == 'dashboard' %}active{% endif %}">
+            <i class="fas fa-th-large me-2"></i> Dashboard
+        </a>
+        <a href="{{ url_for('auth_bp.worker_requests') }}" class="nav-link {% if worker_page == 'tasks' %}active{% endif %}">
+            <i class="fas fa-tasks me-2"></i> My Tasks
+        </a>
+        <a href="{{ url_for('auth_bp.worker_assigned_areas') }}" class="nav-link {% if worker_page == 'areas' %}active{% endif %}">
+            <i class="fas fa-map-marker-alt me-2"></i> Assigned Areas
+        </a>
+        <a href="{{ url_for('auth_bp.worker_history') }}" class="nav-link {% if worker_page == 'history' %}active{% endif %}">
+            <i class="fas fa-history me-2"></i> History
+        </a>
+        <a href="{{ url_for('auth_bp.worker_earnings') }}" class="nav-link {% if worker_page == 'earnings' %}active{% endif %}">
+            <i class="fas fa-wallet me-2"></i> Earnings
+        </a>
+        <hr class="border-secondary">
+        <a href="{{ url_for('auth_bp.worker_profile') }}" class="nav-link {% if worker_page == 'profile' %}active{% endif %}">
+            <i class="fas fa-user-circle me-2"></i> Profile
+        </a>
+        <a href="{{ url_for('auth_bp.logout') }}" class="nav-link text-danger">
+            <i class="fas fa-sign-out-alt me-2"></i> Logout
+        </a>
+    </nav>
+</div>
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Header -->
+    <header class="d-flex justify-content-between align-items-center">
+        <div>
+            <h3 class="fw-bold mb-0">Welcome, {{ session.get('user_name', 'Worker') }}!</h3>
+            <small class="text-muted text-uppercase fw-bold">Worker Portal</small>
+        </div>
+        <img src="https://ui-avatars.com/api/?name={{ session.get('user_name', 'W') }}&background=667eea&color=fff" class="rounded-circle shadow-sm" width="50" alt="Avatar">
+    </header>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- Content Block -->
+    {% block worker_content %}{% endblock %}
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/js/all.min.js"></script>
+
+{% block worker_scripts %}{% endblock %}
+
+</body>
+</html>

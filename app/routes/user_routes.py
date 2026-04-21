@@ -1,6 +1,7 @@
 import os
 from flask import Blueprint, render_template, request, redirect, session, url_for, flash, jsonify
 from app.utils.db import get_db
+from app.utils.auth import build_auth_payload, make_login_response, make_logout_response
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash
 
@@ -64,14 +65,11 @@ def user_login():
         conn.close()
 
         if user and check_password_hash(user['password'], password):
-            session.clear()
-            session["user_id"] = user['id']
-            session["user_name"] = user['full_name']
-            session["user_email"] = user['email']
-            session["role"] = user['account_type']
-            
-            flash(f"Welcome back, {user['full_name']}!", "success")
-            return redirect(url_for("user_bp.user_dashboard"))
+            role = user.get("account_type") or "user"
+            auth_payload = build_auth_payload(user, role)
+
+            flash(f"Welcome back, {auth_payload['user_name']}!", "success")
+            return make_login_response("user_bp.user_dashboard", auth_payload)
         else:
             flash("Invalid email/phone or password.", "danger")
             
@@ -246,7 +244,12 @@ def process_payment():
             (session["user_id"],)
         )
         latest_request = cursor.fetchone()
-        request_id = latest_request["id"] if latest_request else None
+        if not latest_request:
+            conn.close()
+            flash("Create a pickup request before making a payment so the payment stays linked to your account.", "warning")
+            return redirect(redirect_target)
+
+        request_id = latest_request["id"]
 
         owner_share = round(total * 0.50, 2)
         admin_share = round(total * 0.30, 2)
@@ -295,6 +298,5 @@ def user_payment(req_id):
 # ---------- LOGOUT ----------
 @user_bp.route("/logout")
 def user_logout():
-    session.clear()
     flash("You have been logged out.", "info")
-    return redirect("http://127.0.0.1:5000/")
+    return make_logout_response("/", use_url=True)

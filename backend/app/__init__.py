@@ -20,13 +20,14 @@ def create_app(config_name='default'):
     """
     Factory function to create Flask application
     """
-    # Set base directory
-    BASE_DIR = r"D:\INTERSHIP\Garbage Management System\Garbage Management System\smart-garbage-management"
+    # Resolve paths from the current package instead of a hardcoded machine-specific folder.
+    app_dir = os.path.abspath(os.path.dirname(__file__))
+    backend_dir = os.path.dirname(app_dir)
     
     # Create app instance
     app = Flask(__name__, 
-                template_folder=os.path.join(BASE_DIR, 'backend', 'app', 'templates'),
-                static_folder=os.path.join(BASE_DIR, 'backend', 'app', 'static'),
+                template_folder=os.path.join(app_dir, 'templates'),
+                static_folder=os.path.join(app_dir, 'static'),
                 instance_relative_config=True)
     
     # Load config from config.py
@@ -68,12 +69,14 @@ def create_app(config_name='default'):
         from .routes.admin_routes import admin_bp
         from .routes.user_routes import user_bp
         from .routes.api_routes import api_bp
+        from .routes.complaint_routes import complaint_bp
         
         app.register_blueprint(main_bp)
         app.register_blueprint(auth_bp, url_prefix='/auth')
         app.register_blueprint(admin_bp, url_prefix='/admin')
         app.register_blueprint(user_bp, url_prefix='/user')
         app.register_blueprint(api_bp)
+        app.register_blueprint(complaint_bp)
         
     except ImportError as e:
         app.logger.warning(f"Blueprint import failed (normal during dev): {e}")

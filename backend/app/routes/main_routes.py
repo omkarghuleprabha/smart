@@ -1,6 +1,5 @@
-from flask import Blueprint, render_template, jsonify, request, session, redirect, url_for
-from app import db
-from app.models.user_model import User, Complaint, Task
+from flask import Blueprint, render_template, jsonify, session, redirect, url_for
+from app.models.user_model import User
 # Note: Assuming you have State, District, Taluka, and Village models defined 
 # in your models folder as well.
 
@@ -13,44 +12,13 @@ def dashboard():
         return redirect(url_for('auth_bp.login'))
 
     role = session.get('role')
-    user_id = session.get('user_id')
-    user_name = session.get('user_name')
-    
-    data = {"name": user_name, "role": role}
-
-    try:
-        if role == 'district_admin':
-            dist_id = session.get('district_id')
-            # Using SQLAlchemy count instead of Raw SQL
-            # Note: Requires a 'Taluka' model to be defined
-            from app.models.user_model import Taluka # Import locally if needed
-            data['total_talukas'] = Taluka.query.filter_by(district_id=dist_id).count() if dist_id else 0
-            return render_template('dashboard/district_admin.html', data=data)
-
-        elif role == 'admin': # Taluka Admin
-            tal_id = session.get('taluka_id')
-            if tal_id:
-                # Query workers belonging to villages within the selected taluka
-                from app.models.user_model import Village, VillageWorker
-                workers = db.session.query(VillageWorker).join(Village).filter(Village.taluka_id == tal_id).all()
-                data['workers'] = workers
-            else:
-                data['workers'] = []
-            return render_template('dashboard/taluka_admin.html', data=data)
-
-        elif role == 'worker':
-            # Simplified task fetching
-            data['tasks'] = Task.query.filter_by(worker_id=user_id).filter(Task.status != 'completed').all()
-            return render_template('dashboard/worker_dash.html', data=data)
-
-        else: # Citizen / User
-            # Simplified complaint fetching
-            data['my_complaints'] = Complaint.query.filter_by(user_id=user_id).all()
-            return render_template('dashboard/citizen_dash.html', data=data)
-
-    except Exception as e:
-        print(f"Dashboard Error: {e}")
-        return f"Dashboard Error: {str(e)}", 500
+    redirect_map = {
+        'district_admin': 'auth_bp.district_dashboard',
+        'admin': 'auth_bp.taluka_dashboard',
+        'worker': 'auth_bp.worker_dashboard',
+        'user': 'auth_bp.citizen_dashboard',
+    }
+    return redirect(url_for(redirect_map.get(role, 'auth_bp.login')))
 
 # --- 🏠 HOME ROUTE ---
 @main_bp.route('/')

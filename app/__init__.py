@@ -1,11 +1,12 @@
 import os
-from flask import Flask, jsonify  # ✅ FIXED: Added jsonify
+from flask import Flask, jsonify, request, redirect, session, url_for  # ✅ FIXED: Added jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_bcrypt import Bcrypt
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv  # ✅ FIXED: Now works after pip install
+from app.utils.auth import is_protected_path, role_dashboard_endpoint, should_disable_cache, sync_session_from_jwt
 
 # Load environment variables FIRST
 load_dotenv()
@@ -40,10 +41,12 @@ def create_app(config_name='default'):
     # JWT Configuration (Secure)
     # ========================================
     app.config.setdefault('JWT_SECRET_KEY', os.environ.get('JWT_SECRET_KEY', app.config['SECRET_KEY']))
-    app.config.setdefault('JWT_ACCESS_TOKEN_EXPIRES', False)
-    app.config.setdefault('JWT_TOKEN_LOCATION', ['cookies', 'headers', 'json'])
+    app.config.setdefault('JWT_TOKEN_LOCATION', ['cookies'])
     app.config.setdefault('JWT_COOKIE_CSRF_PROTECT', True)
     app.config.setdefault('JWT_COOKIE_SECURE', app.config.get('SESSION_COOKIE_SECURE', False))
+    app.config.setdefault('JWT_ACCESS_COOKIE_NAME', 'sgms_access_token')
+    app.config.setdefault('JWT_REFRESH_COOKIE_NAME', 'sgms_refresh_token')
+    app.config.setdefault('JWT_COOKIE_SAMESITE', app.config.get('SESSION_COOKIE_SAMESITE', 'Lax'))
     
     # ========================================
     # Initialize Extensions
@@ -81,6 +84,27 @@ def create_app(config_name='default'):
         
     except ImportError as e:
         app.logger.warning(f"Blueprint import failed (normal during dev): {e}")
+
+    @app.before_request
+    def enforce_jwt_auth():
+        claims = sync_session_from_jwt()
+
+        if request.path in {'/auth/login', '/user/login'} and request.method == 'GET' and claims:
+            return redirect(url_for(role_dashboard_endpoint(claims.get('role'))))
+
+        if not is_protected_path(request.path):
+            return None
+
+        if claims:
+            return None
+
+        next_path = request.full_path if request.query_string else request.path
+        next_path = next_path.rstrip('?')
+
+        if request.path.startswith('/auth/api/'):
+            return jsonify({'message': 'Login required', 'error': 'unauthorized'}), 401
+
+        return redirect(url_for('auth_bp.login', next=next_path))
     
     # ========================================
     # Database Setup
@@ -111,6 +135,14 @@ def create_app(config_name='default'):
     @login_manager.unauthorized_handler
     def unauthorized():
         return jsonify({'message': 'Login required', 'error': 'unauthorized'}), 401
+
+    @app.after_request
+    def add_no_cache_headers(response):
+        if should_disable_cache(request.path):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
     
     # ========================================
     # Shell Context Processor

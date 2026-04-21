@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.utils.db import get_db
+from app.utils.auth import build_auth_payload, make_login_response, make_logout_response
 
 auth_bp = Blueprint('auth_bp', __name__)
 
@@ -101,8 +102,8 @@ def get_citizen_context(user_id):
                 p.created_at,
                 r.garbage_type
             FROM payments p
-            LEFT JOIN requests r ON r.id = p.request_id
-            WHERE r.user_id = %s OR p.request_id IS NULL
+            INNER JOIN requests r ON r.id = p.request_id
+            WHERE r.user_id = %s
             ORDER BY p.created_at DESC, p.id DESC
             LIMIT 20
         """, (user_id,))
@@ -130,14 +131,14 @@ def get_citizen_context(user_id):
 
 
 def require_user_role():
-    if session.get('role') == 'user':
+    if session.get('role') == 'user' and session.get('user_id'):
         return None
     next_path = request.path
     return redirect(url_for('auth_bp.login', next=next_path))
 
 
 def require_worker_role():
-    if session.get('role') == 'worker':
+    if session.get('role') == 'worker' and session.get('worker_id'):
         return None
     next_path = request.path
     return redirect(url_for('auth_bp.login', next=next_path))
@@ -347,11 +348,7 @@ def login():
             user = cursor.fetchone()
 
             if user and check_password_hash(user['password'], password):
-                session.clear()
-                session['user_id'] = user['id']
-                session['user_name'] = user['name']
-                session['email'] = user['email']
-                session['role'] = form_role
+                auth_payload = build_auth_payload(user, form_role)
                 
                 flash(f"Welcome back, {user['name']}!", "success")
                 
@@ -363,8 +360,8 @@ def login():
                     'user': 'auth_bp.citizen_dashboard'
                 }
                 if form_role == 'user' and next_url.startswith('/auth/citizen'):
-                    return redirect(next_url)
-                return redirect(url_for(redirect_map.get(form_role, 'auth_bp.citizen_dashboard')))
+                    return make_login_response(next_url, auth_payload, use_url=True)
+                return make_login_response(redirect_map.get(form_role, 'auth_bp.citizen_dashboard'), auth_payload)
             
             flash("Invalid credentials for the selected role.", "danger")
         except Exception as e:
@@ -378,9 +375,8 @@ def login():
 # --- 🔴 LOGOUT ROUTE ---
 @auth_bp.route('/logout')
 def logout():
-    session.clear()
     flash("Successfully logged out.", "success")
-    return redirect(url_for('auth_bp.login'))
+    return make_logout_response('auth_bp.login')
 
 # --- 🟡 DASHBOARD ROUTES (Unified Check) ---
 

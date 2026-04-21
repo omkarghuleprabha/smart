@@ -1,1 +1,0 @@
-SELECT * FROM smart_garbage_db.states;

@@ -52,6 +52,7 @@
     .complaint-header h6 { margin: 0; color: #2c3e50; }
     .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 12px; font-weight: 600; }
     .status-badge.pending { background: #fff3cd; color: #856404; }
+    .status-badge.assigned { background: #ede9fe; color: #6d28d9; }
     .status-badge.in-progress { background: #cfe2ff; color: #084298; }
     .status-badge.completed { background: #d1e7dd; color: #0f5132; }
     .progress-bar-wrapper { margin: 15px 0; }
@@ -75,18 +76,16 @@
             <div class="user-avatar">
                 <i class="fas fa-user"></i>
             </div>
-            <div class="user-name">{{ session['user_name'] }}</div>
-            <div class="user-email">{{ session['email'] }}</div>
+            <div class="user-name">{{ session.get('user_name', 'Citizen') }}</div>
+            <div class="user-email">{{ session.get('email', session.get('user_email', 'citizen@smartgarbage.local')) }}</div>
         </div>
 
         <ul class="menu">
-            <li><a href="#" class="active"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
-            <li><a href="#" data-bs-toggle="modal" data-bs-target="#fileComplaintModal"><i class="fas fa-file-alt"></i> <span>File Complaint</span></a></li>
-            <li><a href="#"><i class="fas fa-list-check"></i> <span>My Complaints</span></a></li>
-            <li><a href="#" data-bs-toggle="modal" data-bs-target="#pickupModal"><i class="fas fa-truck"></i> <span>Request Pickup</span></a></li>
-            <li><a href="#" data-bs-toggle="modal" data-bs-target="#paymentModal"><i class="fas fa-credit-card"></i> <span>Payments</span></a></li>
-            <li><a href="#"><i class="fas fa-receipt"></i> <span>Transaction History</span></a></li>
-            <li><a href="#"><i class="fas fa-user-circle"></i> <span>Profile</span></a></li>
+            <li><a href="{{ url_for('user_bp.user_dashboard') }}" class="active"><i class="fas fa-home"></i> <span>Dashboard</span></a></li>
+            <li><a href="{{ url_for('user_bp.user_complaints') }}"><i class="fas fa-file-alt"></i> <span>Complaints</span></a></li>
+            <li><a href="{{ url_for('user_bp.user_requests_page') }}"><i class="fas fa-truck"></i> <span>Pickup Requests</span></a></li>
+            <li><a href="{{ url_for('user_bp.user_payments_page') }}"><i class="fas fa-credit-card"></i> <span>Payments</span></a></li>
+            <li><a href="{{ url_for('user_bp.user_profile_page') }}"><i class="fas fa-user-circle"></i> <span>Profile</span></a></li>
         </ul>
 
         <a href="{{ url_for('auth_bp.logout') }}" class="logout-btn"><i class="fas fa-sign-out-alt"></i> &nbsp; Logout</a>
@@ -103,7 +102,7 @@
             </div>
         </div>
 
-        <div class="section-title">
+        <div class="section-title" id="dashboardOverview">
             <i class="fas fa-dashboard"></i> Dashboard Overview
         </div>
 
@@ -111,28 +110,28 @@
             <div class="col-md-3 col-sm-6">
                 <div class="stat-card">
                     <i class="fas fa-file-alt stat-icon"></i>
-                    <div class="stat-number">{{ stats.total }}</div>
+                    <div class="stat-number">{{ stats.total or 0 }}</div>
                     <div class="stat-label">Total Complaints</div>
                 </div>
             </div>
             <div class="col-md-3 col-sm-6">
                 <div class="stat-card pending">
                     <i class="fas fa-clock stat-icon" style="color: #f39c12;"></i>
-                    <div class="stat-number">{{ stats.pending }}</div>
+                    <div class="stat-number">{{ stats.pending or 0 }}</div>
                     <div class="stat-label">Pending</div>
                 </div>
             </div>
             <div class="col-md-3 col-sm-6">
                 <div class="stat-card in-progress">
                     <i class="fas fa-spinner stat-icon"></i>
-                    <div class="stat-number">{{ stats.in_progress }}</div>
+                    <div class="stat-number">{{ stats.in_progress or 0 }}</div>
                     <div class="stat-label">In Progress</div>
                 </div>
             </div>
             <div class="col-md-3 col-sm-6">
                 <div class="stat-card completed">
                     <i class="fas fa-check-circle stat-icon" style="color: #27ae60;"></i>
-                    <div class="stat-number">{{ stats.completed }}</div>
+                    <div class="stat-number">{{ stats.completed or 0 }}</div>
                     <div class="stat-label">Completed</div>
                 </div>
             </div>
@@ -165,10 +164,11 @@
             </div>
         </div>
 
-        <div class="section-title" style="margin-top: 40px;">
+        <div class="section-title" id="complaintsSection" style="margin-top: 40px;">
             <i class="fas fa-list"></i> Your Recent Complaints
         </div>
         
+        {% if recent_complaints %}
         {% for comp in recent_complaints %}
         <div class="complaint-item {{ comp.status_class }}">
             <div class="complaint-header">
@@ -176,12 +176,90 @@
                 <span class="status-badge {{ comp.status_class }}">{{ comp.status_text }}</span>
             </div>
             <p style="margin: 10px 0; color: #7f8c8d; font-size: 14px;">Location: {{ comp.village }}, Taluka {{ comp.taluka }}</p>
+            <p style="margin: 0 0 10px; color: #7f8c8d; font-size: 13px;">Assigned to: {{ comp.assigned_worker }}</p>
             <div class="progress-bar-wrapper">
-                <div class="progress">.status-badge.completed { background: #d1e7dd;color: #0f5132;}</div>
+                <div class="progress">
+                    <div class="progress-bar complaint-progress-fill {% if comp.status_class == 'completed' %}bg-success{% elif comp.status_class == 'in-progress' %}bg-primary{% else %}bg-warning{% endif %}" data-progress="{{ comp.progress_percent }}">
+                        {{ comp.progress_percent }}%
+                    </div>
+                </div>
             </div>
-            <small style="color: #7f8c8d;">Filed on: {{ comp.date }}</small>
+            <small style="color: #7f8c8d;">Last update: {{ comp.last_update }}</small>
         </div>
         {% endfor %}
+        {% else %}
+        <div class="complaint-item">
+            <div class="complaint-header">
+                <h6>No complaints yet</h6>
+            </div>
+            <p style="margin: 10px 0; color: #7f8c8d; font-size: 14px;">Your recent complaints will appear here once you file one.</p>
+        </div>
+        {% endif %}
+
+        <div class="section-title" id="transactionsSection" style="margin-top: 40px;">
+            <i class="fas fa-receipt"></i> Requests And Payments
+        </div>
+
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="action-card text-start">
+                    <h5 class="mb-3">Pickup Requests</h5>
+                    {% for order in user_requests %}
+                    <div class="complaint-item {{ order.status|replace('_', '-') }}" style="box-shadow: none; margin-bottom: 12px;">
+                        <div class="complaint-header">
+                            <h6>#{{ order.id }} | {{ order.garbage_type }}</h6>
+                            <span class="status-badge {{ order.status|replace('_', '-') }}">{{ order.status|replace('_', ' ')|title }}</span>
+                        </div>
+                        <p style="margin: 10px 0; color: #7f8c8d; font-size: 14px;">Amount: ₹{{ order.amount }} | Requested: {{ order.created_at.strftime('%d %b %Y %I:%M %p') if order.created_at else 'N/A' }}</p>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">No pickup requests found yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="action-card text-start">
+                    <h5 class="mb-3">Payment History</h5>
+                    {% for payment in payment_history %}
+                    <div class="complaint-item completed" style="box-shadow: none; margin-bottom: 12px;">
+                        <div class="complaint-header">
+                            <h6>#PAY-{{ payment.id }}</h6>
+                            <span class="status-badge completed">Recorded</span>
+                        </div>
+                        <p style="margin: 10px 0; color: #7f8c8d; font-size: 14px;">{{ payment.garbage_type }} | Total: ₹{{ payment.total }}</p>
+                        <small style="color: #7f8c8d;">Paid on: {{ payment.created_at.strftime('%d %b %Y %I:%M %p') if payment.created_at else 'N/A' }}</small>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">No payment history available yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title" id="profileSection" style="margin-top: 40px;">
+            <i class="fas fa-user-circle"></i> Your Profile
+        </div>
+
+        <div class="action-card text-start">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <h5 class="mb-1">{{ user_profile.name or session.get('user_name', 'Citizen') }}</h5>
+                    <p class="text-muted mb-0">Citizen ID: #{{ user_profile.id or session.get('user_id', 'N/A') }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Email:</strong> {{ user_profile.email or session.get('email', session.get('user_email', 'N/A')) }}</p>
+                    <p class="mb-0"><strong>Phone:</strong> {{ user_profile.phone or 'N/A' }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>District ID:</strong> {{ user_profile.district_id or 'N/A' }}</p>
+                    <p class="mb-0"><strong>Taluka ID:</strong> {{ user_profile.taluka_id or 'N/A' }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="mb-1"><strong>Village ID:</strong> {{ user_profile.village_id or 'N/A' }}</p>
+                    <p class="mb-0"><strong>Member Since:</strong> {{ user_profile.created_at.strftime('%d %b %Y') if user_profile.created_at else 'N/A' }}</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="modal fade" id="fileComplaintModal" tabindex="-1">
@@ -192,7 +270,8 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <form action="/complaint/add" method="POST" enctype="multipart/form-data">
+                    <form action="{{ url_for('complaint_bp.add_complaint') }}" method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="next_page" value="{{ request.path }}">
                         <div class="mb-3">
                             <label class="form-label">Complaint Title</label>
                             <input type="text" name="title" class="form-control" placeholder="e.g., Garbage Accumulation" required>
@@ -227,8 +306,8 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Upload Photo</label>
-                            <input type="file" name="garbage_img" class="form-control" accept="image/*" required>
+                            <label class="form-label">Upload Photo (Optional)</label>
+                            <input type="file" name="garbage_img" class="form-control" accept="image/*">
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Priority Level</label>
@@ -256,7 +335,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <form action="/pickup/request" method="POST">
+                    <form action="{{ url_for('user_bp.new_request') }}" method="POST">
                         <div class="mb-3">
                             <label class="form-label">Pickup Type</label>
                             <div class="form-check">
@@ -303,7 +382,13 @@
                         <h6>Scan to Pay via PhonePe/Google Pay</h6>
                         <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=municipality@okhdfcbank&tn=SmartGarbageFee" alt="QR Code">
                         <hr>
-                        <form action="/payment/process" method="POST">
+                        <form action="{{ url_for('user_bp.process_dashboard_payment') }}" method="POST">
+                            <select name="request_id" class="form-control mb-3">
+                                <option value="">Select related request (optional)</option>
+                                {% for order in user_requests %}
+                                <option value="{{ order.id }}">#{{ order.id }} - {{ order.garbage_type }} - ₹{{ order.amount }}</option>
+                                {% endfor %}
+                            </select>
                             <input type="number" name="amount" class="form-control" placeholder="Amount in ₹" value="500">
                             <button type="submit" name="gateway" value="phonepe" class="btn btn-primary mt-3 w-100">Pay with PhonePe</button>
                             <button type="submit" name="gateway" value="gpay" class="btn btn-success mt-2 w-100">Pay with Google Pay</button>
@@ -343,6 +428,11 @@
             const select = document.getElementById('villageSelect');
             select.innerHTML = '<option value="">Select Village</option>';
             villages.forEach(v => select.innerHTML += `<option value="${v}">${v}</option>`);
+        });
+
+        document.querySelectorAll('.complaint-progress-fill').forEach((bar) => {
+            const progress = Number(bar.dataset.progress || 0);
+            bar.style.width = `${progress}%`;
         });
     </script>
 </body>
